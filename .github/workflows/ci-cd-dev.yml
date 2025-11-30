@@ -107,45 +107,84 @@ jobs:
           echo "ECR Image: $ECR_IMAGE"
           
           # Instalar sshpass para autenticación por contraseña
-          apt-get update && apt-get install -y sshpass
+          sudo apt-get update && sudo apt-get install -y sshpass
           
-          # Conectar a EC2 con usuario y contraseña
-          sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Variables
-            ENV=dev
-            PORT=8080
-            ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/mlops/iris_app:dev-latest
-            REGISTRY=${{ steps.login-ecr.outputs.registry }}
-            REGION=${{ secrets.AWS_REGION }}
-            
-            # Descargar las credenciales de ECR
-            sudo aws ecr get-login-password --region $REGION | sudo docker login --username AWS --password-stdin $REGISTRY
-            
-            # Nombre del contenedor
-            CONTAINER_NAME="mlops/iris_app-dev"
-            
-            # Detener contenedor anterior si existe
-            sudo docker stop $CONTAINER_NAME || true
-            sudo docker rm $CONTAINER_NAME || true
-            
-            # Descargar la nueva imagen
-            sudo docker pull $ECR_IMAGE
-            
-            # Ejecutar contenedor en puerto 8080
-            sudo docker run -d \
-              --name $CONTAINER_NAME \
-              --restart unless-stopped \
-              -p 8080:8501 \
-              -e AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }} \
-              -e AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }} \
-              -e AWS_BUCKET=${{ secrets.AWS_BUCKET }} \
-              -e MODEL_FILE=${{ secrets.MODEL_FILE }} \
-              -e ENV=dev \
-              -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
-              $ECR_IMAGE
-            
-            echo "DEV container deployed successfully on port 8080"
-          EOF
+          # Crear script de deployment
+          cat > /tmp/deploy.sh << 'DEPLOY_EOF'
+          #!/bin/bash
+          set -e
+          
+          # Variables recibidas como argumentos
+          ENV=$1
+          PORT=$2
+          ECR_IMAGE=$3
+          REGISTRY=$4
+          REGION=$5
+          AWS_ACCESS_KEY=$6
+          AWS_SECRET_KEY=$7
+          AWS_BUCKET=$8
+          MODEL_FILE=$9
+          
+          echo "Starting deployment..."
+          echo "Environment: $ENV"
+          echo "Port: $PORT"
+          echo "ECR Image: $ECR_IMAGE"
+          
+          # Configurar credenciales de AWS
+          export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
+          export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+          export AWS_DEFAULT_REGION=$REGION
+          
+          # Descargar las credenciales de ECR y hacer login en Docker
+          echo "Logging in to ECR..."
+          aws ecr get-login-password --region $REGION | sudo docker login --username AWS --password-stdin $REGISTRY
+          
+          # Nombre del contenedor
+          CONTAINER_NAME="iris_app-dev"
+          
+          # Detener contenedor anterior si existe
+          echo "Stopping previous container..."
+          sudo docker stop $CONTAINER_NAME || true
+          sudo docker rm $CONTAINER_NAME || true
+          
+          # Descargar la nueva imagen
+          echo "Pulling Docker image..."
+          sudo docker pull $ECR_IMAGE
+          
+          # Ejecutar contenedor en puerto 8080
+          echo "Running new container..."
+          sudo docker run -d \
+            --name $CONTAINER_NAME \
+            --restart unless-stopped \
+            -p $PORT:8501 \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY \
+            -e AWS_BUCKET=$AWS_BUCKET \
+            -e MODEL_FILE=$MODEL_FILE \
+            -e ENV=$ENV \
+            -e AWS_DEFAULT_REGION=$REGION \
+            $ECR_IMAGE
+          
+          echo "DEV container deployed successfully on port $PORT"
+          DEPLOY_EOF
+          
+          chmod +x /tmp/deploy.sh
+          
+          # Ejecutar script en EC2 mediante SSH
+          sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            /tmp/deploy.sh \
+            "$ENV" \
+            "$PORT" \
+            "$ECR_IMAGE" \
+            "${{ steps.login-ecr.outputs.registry }}" \
+            "${{ secrets.AWS_REGION }}" \
+            "${{ secrets.AWS_ACCESS_KEY }}" \
+            "${{ secrets.AWS_SECRET_KEY }}" \
+            "${{ secrets.AWS_BUCKET }}" \
+            "${{ secrets.MODEL_FILE }}"
       
       - name: Deployment Complete
         run: echo "✓ DEV deployment completed successfully"
