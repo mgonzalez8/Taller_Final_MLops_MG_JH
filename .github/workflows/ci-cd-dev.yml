@@ -108,6 +108,9 @@ jobs:
           
           # Instalar sshpass para autenticación por contraseña
           sudo apt-get update && sudo apt-get install -y sshpass
+
+          # Crear directorio temporal si no existe
+          mkdir -p /tmp
           
           # Crear script de deployment
           cat > /tmp/deploy.sh << 'DEPLOY_EOF'
