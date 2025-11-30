@@ -26,13 +26,10 @@ ENV AWS_BUCKET=${AWS_BUCKET}
 ENV MODEL_FILE=${MODEL_FILE}
 ENV ENV=${ENV}
 
-# Script para descargar el modelo
-COPY scripts/setup.py .
-COPY scripts/pretrain.py .
 
 # Descargar el modelo desde S3 durante la construcción
-RUN python setup.py
-RUN python pretrain.py
+RUN python scripts/setup.py && \
+    python scripts/pretrain.py
 
 # Exponer puerto de Streamlit
 EXPOSE 8501
