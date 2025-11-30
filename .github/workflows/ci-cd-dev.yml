@@ -119,20 +119,20 @@ jobs:
             REGION=${{ secrets.AWS_REGION }}
             
             # Descargar las credenciales de ECR
-            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
+            sudo aws ecr get-login-password --region $REGION | sudo docker login --username AWS --password-stdin $REGISTRY
             
             # Nombre del contenedor
             CONTAINER_NAME="mlops/iris_app-dev"
             
             # Detener contenedor anterior si existe
-            docker stop $CONTAINER_NAME || true
-            docker rm $CONTAINER_NAME || true
+            sudo docker stop $CONTAINER_NAME || true
+            sudo docker rm $CONTAINER_NAME || true
             
             # Descargar la nueva imagen
-            docker pull $ECR_IMAGE
+            sudo docker pull $ECR_IMAGE
             
             # Ejecutar contenedor en puerto 8080
-            docker run -d \
+            sudo docker run -d \
               --name $CONTAINER_NAME \
               --restart unless-stopped \
               -p 8080:8501 \
