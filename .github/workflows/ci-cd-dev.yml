@@ -60,6 +60,8 @@ jobs:
 
   build:
     name: Build & Deploy Stage - DEV
+    needs: test
+    if: success()
     runs-on: ubuntu-latest
     
     steps:
