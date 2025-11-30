@@ -108,25 +108,25 @@ jobs:
           
           # Instalar sshpass para autenticación por contraseña
           sudo apt-get update && sudo apt-get install -y sshpass
-
-          # Crear directorio temporal si no existe
-          mkdir -p /tmp
           
-          # Crear script de deployment
-          cat > /tmp/deploy.sh << 'DEPLOY_EOF'
-          #!/bin/bash
+          # Ejecutar comandos de deployment directamente via SSH
+          sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_COMMANDS'
+          
           set -e
           
-          # Variables recibidas como argumentos
-          ENV=$1
-          PORT=$2
-          ECR_IMAGE=$3
-          REGISTRY=$4
-          REGION=$5
-          AWS_ACCESS_KEY=$6
-          AWS_SECRET_KEY=$7
-          AWS_BUCKET=$8
-          MODEL_FILE=$9
+          # Variables
+          ENV=dev
+          PORT=8080
+          ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/mlops/iris_app:dev-latest
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          REGION=${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
+          AWS_BUCKET=${{ secrets.AWS_BUCKET }}
+          MODEL_FILE=${{ secrets.MODEL_FILE }}
           
           echo "Starting deployment..."
           echo "Environment: $ENV"
@@ -169,25 +169,8 @@ jobs:
             $ECR_IMAGE
           
           echo "DEV container deployed successfully on port $PORT"
-          DEPLOY_EOF
           
-          chmod +x /tmp/deploy.sh
-          
-          # Ejecutar script en EC2 mediante SSH
-          sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-            /tmp/deploy.sh \
-            "$ENV" \
-            "$PORT" \
-            "$ECR_IMAGE" \
-            "${{ steps.login-ecr.outputs.registry }}" \
-            "${{ secrets.AWS_REGION }}" \
-            "${{ secrets.AWS_ACCESS_KEY }}" \
-            "${{ secrets.AWS_SECRET_KEY }}" \
-            "${{ secrets.AWS_BUCKET }}" \
-            "${{ secrets.MODEL_FILE }}"
+          DEPLOY_COMMANDS
       
       - name: Deployment Complete
         run: echo "✓ DEV deployment completed successfully"
