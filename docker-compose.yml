@@ -12,7 +12,7 @@ services:
         MODEL_FILE: ${MODEL_FILE}
         ENV: dev
     ports:
-      - "8501:8501"
+      - "8080:8501"
     environment:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_KEY=${AWS_SECRET_KEY}
@@ -38,7 +38,7 @@ services:
         MODEL_FILE: ${MODEL_FILE}
         ENV: prod
     ports:
-      - "8502:8501"
+      - "8081:8501"
     environment:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_KEY=${AWS_SECRET_KEY}
