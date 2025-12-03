@@ -102,7 +102,7 @@ def load_model():
 
 # --- Interfaz Streamlit ---
 
-st.title("🤖 API de Inferencia ONNX")
+st.title("🤖 API de Inferencia ONNX-Prueba")
 st.markdown(f"**Entorno:** `{ENV}` | **Modelo:** `{MODEL_FILENAME}`")
 
 # Cargar el modelo al iniciar
