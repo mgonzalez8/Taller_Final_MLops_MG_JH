@@ -56,13 +56,13 @@ jobs:
       
       - name: Test Results
         if: always()
-        run: echo "✓ All tests passed for prod environment"
+        run: echo "✓ All tests passed for PROD environment"
 
   build:
-    name: Build & Deploy Stage - prod
-    runs-on: ubuntu-latest
+    name: Build & Deploy Stage - PROD
     needs: test
     if: success()
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
@@ -97,11 +97,11 @@ jobs:
             MODEL_FILE=${{ secrets.MODEL_FILE }}
             ENV=prod
       
-      - name: Deploy to EC2 - prod (Port 8080)
+      - name: Deploy to EC2 - prod (Port 8081)
         run: |
           ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/mlops/iris_app:prod-latest
           ENV=prod
-          PORT=8080
+          PORT=8081
           
           echo "Deploying prod to EC2 instance..."
           echo "Environment: $ENV"
@@ -109,45 +109,70 @@ jobs:
           echo "ECR Image: $ECR_IMAGE"
           
           # Instalar sshpass para autenticación por contraseña
-          apt-get update && apt-get install -y sshpass
+          sudo apt-get update && sudo apt-get install -y sshpass
           
-          # Conectar a EC2 con usuario y contraseña
-          sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Variables
-            ENV=prod
-            PORT=8081
-            ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/mlops/iris_app:prod-latest
-            REGISTRY=${{ steps.login-ecr.outputs.registry }}
-            REGION=${{ secrets.AWS_REGION }}
-            
-            # Descargar las credenciales de ECR
-            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
-            
-            # Nombre del contenedor
-            CONTAINER_NAME="mlops/iris_app-prod"
-            
-            # Detener contenedor anterior si existe
-            docker stop $CONTAINER_NAME || true
-            docker rm $CONTAINER_NAME || true
-            
-            # Descargar la nueva imagen
-            docker pull $ECR_IMAGE
-            
-            # Ejecutar contenedor en puerto 8081
-            docker run -d \
-              --name $CONTAINER_NAME \
-              --restart unless-stopped \
-              -p 8081:8501 \
-              -e AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }} \
-              -e AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }} \
-              -e AWS_BUCKET=${{ secrets.AWS_BUCKET }} \
-              -e MODEL_FILE=${{ secrets.MODEL_FILE }} \
-              -e ENV=prod \
-              -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }} \
-              $ECR_IMAGE
-            
-            echo "PROD container deployed successfully on port 8081"
-          EOF
+          # Ejecutar comandos de deployment directamente via SSH
+          sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/prod/null \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_COMMANDS'
+          
+          set -e
+          
+          # Variables
+          ENV=prod
+          PORT=8081
+          ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/mlops/iris_app:prod-latest
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          REGION=${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
+          AWS_BUCKET=${{ secrets.AWS_BUCKET }}
+          MODEL_FILE=${{ secrets.MODEL_FILE }}
+          
+          echo "Starting deployment..."
+          echo "Environment: $ENV"
+          echo "Port: $PORT"
+          echo "ECR Image: $ECR_IMAGE"
+          
+          # Configurar credenciales de AWS
+          export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
+          export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+          export AWS_DEFAULT_REGION=$REGION
+          
+          # Descargar las credenciales de ECR y hacer login en Docker
+          echo "Logging in to ECR..."
+          aws ecr get-login-password --region $REGION | sudo docker login --username AWS --password-stdin $REGISTRY
+          
+          # Nombre del contenedor
+          CONTAINER_NAME="iris_app-prod"
+          
+          # Detener contenedor anterior si existe
+          echo "Stopping previous container..."
+          sudo docker stop $CONTAINER_NAME || true
+          sudo docker rm $CONTAINER_NAME || true
+          
+          # Descargar la nueva imagen
+          echo "Pulling Docker image..."
+          sudo docker pull $ECR_IMAGE
+          
+          # Ejecutar contenedor en puerto 8081
+          echo "Running new container..."
+          sudo docker run -d \
+            --name $CONTAINER_NAME \
+            --restart unless-stopped \
+            -p $PORT:8501 \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY \
+            -e AWS_BUCKET=$AWS_BUCKET \
+            -e MODEL_FILE=$MODEL_FILE \
+            -e ENV=$ENV \
+            -e AWS_DEFAULT_REGION=$REGION \
+            $ECR_IMAGE
+          
+          echo "prod container deployed successfully on port $PORT"
+          
+          DEPLOY_COMMANDS
       
       - name: Deployment Complete
         run: echo "✓ prod deployment completed successfully"
